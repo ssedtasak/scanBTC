@@ -1,0 +1,137 @@
+import pytz, time
+import pandas as pd
+import requests, os
+from datetime import timedelta,datetime
+from bs4 import BeautifulSoup
+from selenium import webdriver
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.common.by import By
+from parinya import LINE
+from IPython.display import display
+ 
+os.chdir(r"C:\Users\sedta\Documents\XRP")
+
+def clean_datetime(df):
+    date_time = df['Date'].str[-5:].str.split(':')
+    
+    for idx, (i, j) in enumerate(date_time):
+        i = int(i)
+        if i > 23:
+            date_time[idx][0] = str(i-24)
+            
+    for idx, i in enumerate(date_time):
+        date_time[idx] = ':'.join(i)
+    
+    df['Date'] = df['Date'].str[:-5].str.cat(date_time)
+    return df
+
+def get_data(driver, url, amount):
+    driver.get(url)
+    WebDriverWait(driver, 40).until(EC.element_to_be_clickable((By.XPATH, '/html/body/div[3]/div[4]/div[2]/div[3]/div/div/div/div[3]/div[2]/div[2]/ul/li[3]')))
+    
+    html = driver.page_source
+    
+    df = pd.read_html(html)[6]
+
+    cols = ['Date', 'Block Height', 'Transaction ID', 'Confirmations', 'Inputs', 'Outputs', 'Amount', 'Fees','Fees per byte','Size']
+    df.columns = cols
+
+    df['Amount'] = df['Amount'].str.replace('btc', '')
+    df['Amount'] = df['Amount'].str.replace(',', "")
+    df['Amount'] = df['Amount'].astype('float64')                       # เปลี่ยนช่อง amount ให้เป็น ตัวเลขล้วน float type
+
+    df['Date'] = df['Date'].str.replace(',', "")   
+    df['Date'] = df['Date'].replace('New', getT()) 
+    #df['Date'] = pd.to_datetime(df['Date'])
+
+    if df['Date'].__contains__('24:'):
+        df['Date'] = df['Date'].replace('24:', '00:')
+        
+        # df = clean_datetime(df)
+        # df['Date'] = pd.to_datetime(df['Date'])                       #เปลี่ยน 24: เป็น 00: 
+        print('1')
+        
+    else:
+        df['Date'] = df['Date']
+
+    display(df)  
+    print(df['Amount'][0])
+    print(type(df['Amount'][0]))  
+    df = df[df['Amount'].isin(amount)]                                     #ทำให้เหลือแต่ tag ที่ต้องการ
+    df = df.reset_index(drop=True)
+    #df['Date'] = pd.to_datetime(df['Date'], format='%Y%m%d', errors='ignore')
+    return df
+
+def getT():
+    Time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')     
+    return Time
+    
+
+    # # Parameters
+
+
+
+# Hyperparameters
+url = 'https://explorer.bitcoin.com/btc/address/1NDyJtNTjmwk5xPNhjgAMu4HDHigtobu1s'
+amount = ['+20.00000000','-20.00000000','+100.00000000','-100.00000000']
+line = LINE()
+
+# Algorithm
+
+driver = webdriver.Chrome()
+
+while True:
+    # try:
+            Time = getT()
+            df = get_data(driver, url, amount) 
+            if len(df) > 0:
+
+                df_min_date = pd.to_datetime(df.loc[df['Date'] == df['Date'].max(), 'Date'].values[0])
+                df_min_date_tag = df.loc[df['Transaction ID'] == df['Transaction ID'].max(), 'Transaction ID'].values[0]
+                print(df_min_date_tag)
+                df_alert = pd.read_csv(r'.\alert_log btc.csv')
+                df_alert_min_date = pd.to_datetime(df_alert.loc[df_alert['Date'] == df_alert['Date'].max(), 'Date'].values[0])
+                df_alert_min_date_tag = df_alert.loc[df_alert['Transaction ID'] == df_alert['Transaction ID'].max(), 'Transaction ID'].values[0]
+                print(df_alert_min_date_tag)
+                if df_min_date > df_alert_min_date:
+                    df['Date'] = pd.to_datetime(df['Date']) 
+                    df = df.loc[df['Date'] > df_alert_min_date, :]
+                    print(df)
+                    print(type(df['Amount'][0]))  
+                    
+                    for i in range(len(df)):
+                        
+                        date = df.loc[i, 'Date'].strftime('%Y-%m-%d %H:%M:%S')
+                        amount = df.loc[i, 'Amount']
+                        tran = df.loc[i, 'Transaction ID']
+                        
+                        # line.sendtext(f'\nDate: {date} \
+                        #                 \nAmount: {amount}\
+                        #                 \nTran: {tran}')
+                                    
+                        print('Sending notification to LINE')
+                                    
+                    print('logging')
+                    df.to_csv(r'.\alert_log btc.csv', index=False, mode='a', header=False)
+        
+            else:
+                pass
+    
+    # except Exception as e:
+        
+    #     print("Something wrong, Please checkc errorlog")
+    #     #line.sendtext('Something wrong, Please checkc errorlog"')
+        
+    #     with open(r".\errorlogbtc.txt", "a+") as myfile:
+    #         current_time = datetime.now()
+            
+    #         myfile.write(f"\n{current_time}")
+    #         myfile.write(f"\nError log: {e}")
+
+            time.sleep(60)
+            
+
+                
+        
+
