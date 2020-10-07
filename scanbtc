@@ -10,7 +10,7 @@ from selenium.webdriver.common.by import By
 from parinya import LINE
 from IPython.display import display
  
-os.chdir(r"C:\Users\sedta\Documents\XRP")
+os.chdir(r"C:\Users\sedta\OneDrive\เอกสาร\XRP")
 
 def clean_datetime(df):
     date_time = df['Date'].str[-5:].str.split(':')
@@ -26,7 +26,7 @@ def clean_datetime(df):
     df['Date'] = df['Date'].str[:-5].str.cat(date_time)
     return df
 
-def get_data(driver, url, amount):
+def get_data(driver, url):
     driver.get(url)
     WebDriverWait(driver, 40).until(EC.element_to_be_clickable((By.XPATH, '/html/body/div[3]/div[4]/div[2]/div[3]/div/div/div/div[3]/div[2]/div[2]/ul/li[3]')))
     
@@ -39,66 +39,55 @@ def get_data(driver, url, amount):
 
     df['Amount'] = df['Amount'].str.replace('btc', '')
     df['Amount'] = df['Amount'].str.replace(',', "")
-    df['Amount'] = df['Amount'].astype('float64')                       # เปลี่ยนช่อง amount ให้เป็น ตัวเลขล้วน float type
-
+    df['Amount'] = df['Amount'].astype('float64')                       
     df['Date'] = df['Date'].str.replace(',', "")   
     df['Date'] = df['Date'].replace('New', getT()) 
-    #df['Date'] = pd.to_datetime(df['Date'])
 
     if df['Date'].__contains__('24:'):
         df['Date'] = df['Date'].replace('24:', '00:')
-        
-        # df = clean_datetime(df)
-        # df['Date'] = pd.to_datetime(df['Date'])                       #เปลี่ยน 24: เป็น 00: 
-        print('1')
         
     else:
         df['Date'] = df['Date']
 
     display(df)  
-    print(df['Amount'][0])
-    print(type(df['Amount'][0]))  
-    df = df[df['Amount'].isin(amount)]                                     #ทำให้เหลือแต่ tag ที่ต้องการ
-    df = df.reset_index(drop=True)
-    #df['Date'] = pd.to_datetime(df['Date'], format='%Y%m%d', errors='ignore')
     return df
 
 def getT():
     Time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')     
     return Time
-    
-
-    # # Parameters
-
-
 
 # Hyperparameters
 url = 'https://explorer.bitcoin.com/btc/address/1NDyJtNTjmwk5xPNhjgAMu4HDHigtobu1s'
-amount = ['+20.00000000','-20.00000000','+100.00000000','-100.00000000']
-line = LINE()
+line = LINE('AS028G1OsSpgT3ibFiGRh1E2FgwED8aZOBdmJszcGUj')
 
 # Algorithm
 
 driver = webdriver.Chrome()
 
 while True:
-    # try:
+    try:
             Time = getT()
-            df = get_data(driver, url, amount) 
+            df = get_data(driver, url) 
+            df = df[df['Amount'].isin([20,50,100])]                                
+            df = df.reset_index(drop=True)
             if len(df) > 0:
+                print('')
+                df_min_date = df
+                df_min_date['Date'] = pd.to_datetime(df['Date'])
+                df_min_date = df.loc[df['Date'] == df['Date'].max(), 'Date'].values[0]
+                df_min_date_tag = df.loc[df['Date'] == df['Date'].max(), 'Transaction ID'].values[0]
+                print(df_min_date ,df_min_date_tag)
 
-                df_min_date = pd.to_datetime(df.loc[df['Date'] == df['Date'].max(), 'Date'].values[0])
-                df_min_date_tag = df.loc[df['Transaction ID'] == df['Transaction ID'].max(), 'Transaction ID'].values[0]
-                print(df_min_date_tag)
                 df_alert = pd.read_csv(r'.\alert_log btc.csv')
-                df_alert_min_date = pd.to_datetime(df_alert.loc[df_alert['Date'] == df_alert['Date'].max(), 'Date'].values[0])
-                df_alert_min_date_tag = df_alert.loc[df_alert['Transaction ID'] == df_alert['Transaction ID'].max(), 'Transaction ID'].values[0]
-                print(df_alert_min_date_tag)
-                if df_min_date > df_alert_min_date:
+                df_alert['Date'] = pd.to_datetime(df_alert['Date'])
+                df_alert_min_date = df_alert.loc[df_alert['Date'] == df_alert['Date'].max(), 'Date'].values[0]
+                df_alert_min_date_tag = df_alert.loc[df_alert['Date'] == df_alert['Date'].max(), 'Transaction ID'].values[0]
+                print(df_alert_min_date, df_alert_min_date_tag)
+                
+                if df_min_date > df_alert_min_date: #and df_min_date_tag != df_alert_min_date_tag :
                     df['Date'] = pd.to_datetime(df['Date']) 
                     df = df.loc[df['Date'] > df_alert_min_date, :]
-                    print(df)
-                    print(type(df['Amount'][0]))  
+                    display(df)
                     
                     for i in range(len(df)):
                         
@@ -106,9 +95,9 @@ while True:
                         amount = df.loc[i, 'Amount']
                         tran = df.loc[i, 'Transaction ID']
                         
-                        # line.sendtext(f'\nDate: {date} \
-                        #                 \nAmount: {amount}\
-                        #                 \nTran: {tran}')
+                        line.sendtext(f'\nDate: {date} \
+                                        \nAmount: {amount}\
+                                        \nTran: {tran}')
                                     
                         print('Sending notification to LINE')
                                     
@@ -118,18 +107,18 @@ while True:
             else:
                 pass
     
-    # except Exception as e:
+    except Exception as e:
         
-    #     print("Something wrong, Please checkc errorlog")
-    #     #line.sendtext('Something wrong, Please checkc errorlog"')
+        print("Something wrong, Please checkc errorlog")
+        line.sendtext('Something wrong, Please checkc errorlog"')
         
-    #     with open(r".\errorlogbtc.txt", "a+") as myfile:
-    #         current_time = datetime.now()
+        with open(r".\errorlogbtc.txt", "a+") as myfile:
+            current_time = datetime.now()
             
-    #         myfile.write(f"\n{current_time}")
-    #         myfile.write(f"\nError log: {e}")
+            myfile.write(f"\n{current_time}")
+            myfile.write(f"\nError log: {e}")
 
-            time.sleep(60)
+    time.sleep(60)
             
 
                 
